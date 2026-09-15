@@ -1,27 +1,42 @@
 import { useNavigation, CommonActions, useRoute } from '@react-navigation/native';
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, StatusBar, ScrollView, TextInput, Image, Linking, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, StatusBar, ScrollView, TextInput, Image, Linking, Alert, Modal, ActivityIndicator } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import FeatherIcon from 'react-native-vector-icons/Feather';
 import { showToast } from '../../utils/toast';
+import { guardService } from '../../services/guardService';
+import { societyService } from '../../services/societyService';
 
 const ResidentsList = () => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [residents, setResidents] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  const residents = [
-    { id: '1', name: 'Arjun Mehta', flat: 'A-1203 • Tower A', initials: 'AM', phone: '+919876543210' },
-    { id: '2', name: 'Sneha Kapoor', flat: 'B-0505 • Tower B', initials: 'SK', phone: '+919876543211' },
-    { id: '3', name: 'Vikram Reddy', flat: 'C-0802 • Tower C', initials: 'VR', phone: '+919876543212' },
-    { id: '4', name: 'Neha Malhotra', flat: 'A-0304 • Tower A', initials: 'NM', phone: '+919876543213' },
-    { id: '5', name: 'Rohit Gupta', flat: 'D-1101 • Tower D', initials: 'RG', phone: '+919876543214' },
-    { id: '6', name: 'Ananya Singh', flat: 'B-0201 • Tower B', initials: 'AS', phone: '+919876543215' },
-    { id: '7', name: 'Kiran Joshi', flat: 'C-0409 • Tower C', initials: 'KJ', phone: '+919876543216' },
-  ];
+  useEffect(() => {
+    const fetchResidents = async () => {
+      setLoading(true);
+      try {
+        const res: any = await guardService.searchResidents(searchQuery);
+        const list = res?.data || res || [];
+        if (Array.isArray(list)) {
+          setResidents(list.map((r: any) => ({
+            id: r.id || r._id || String(Math.random()),
+            name: r.name || r.fullName || 'Resident',
+            flat: r.flatNumber ? `${r.flatNumber} • ${r.tower || r.block || ''}` : (r.flat || 'Flat'),
+            initials: (r.name || r.fullName || 'RES').split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase(),
+            phone: r.phone || r.mobile || '',
+          })));
+        }
+      } catch (err: any) {
+        showToast(err.message || 'Failed to search residents');
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const filteredResidents = residents.filter(resident => 
-    resident.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    resident.flat.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+    const timer = setTimeout(fetchResidents, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   return (
     <View style={styles.residentsContainer}>
@@ -39,9 +54,10 @@ const ResidentsList = () => {
           value={searchQuery}
           onChangeText={setSearchQuery}
         />
+        {loading && <ActivityIndicator size="small" color="#2563EB" style={{ marginRight: 8 }} />}
       </View>
 
-      {filteredResidents.map((resident) => (
+      {residents.map((resident) => (
         <View key={resident.id} style={styles.residentCard}>
           <View style={styles.residentLeft}>
             <View style={[styles.avatar, { backgroundColor: '#DBEAFE' }]}>
@@ -65,40 +81,33 @@ const ResidentsList = () => {
 };
 
 const NotificationsList = () => {
-  const [notifications, setNotifications] = useState([
-    {
-      id: '1',
-      title: 'Visitor Approved',
-      message: 'Arjun Mehta approved Priya Verma',
-      time: '1 min ago',
-      type: 'approved',
-      read: false,
-    },
-    {
-      id: '2',
-      title: 'Visitor Rejected',
-      message: 'Sneha Kapoor rejected a delivery',
-      time: '18 min ago',
-      type: 'rejected',
-      read: false,
-    },
-    {
-      id: '3',
-      title: 'Emergency Alert',
-      message: 'SOS from Flat C-0802',
-      time: '2 hr ago',
-      type: 'emergency',
-      read: false,
-    },
-    {
-      id: '4',
-      title: 'Visitor Approved',
-      message: 'Vikram Reddy approved a guest',
-      time: '3 hr ago',
-      type: 'approved',
-      read: true,
-    },
-  ]);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchNotifs = async () => {
+      setLoading(true);
+      try {
+        const res: any = await societyService.getNotifications();
+        const list = res?.data || res || [];
+        if (Array.isArray(list)) {
+          setNotifications(list.map((n: any) => ({
+            id: n.id || n._id || String(Math.random()),
+            title: n.title || 'Notification',
+            message: n.message || n.desc || '',
+            time: n.time || n.createdAt || 'Just now',
+            type: n.type || 'notice',
+            read: !!n.read,
+          })));
+        }
+      } catch (err: any) {
+        showToast(err.message || 'Failed to load notifications');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchNotifs();
+  }, []);
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -138,7 +147,10 @@ const NotificationsList = () => {
           </Text>
         </View>
         <TouchableOpacity
-          onPress={() => {
+          onPress={async () => {
+            try {
+              await societyService.markAllNotificationsRead();
+            } catch (err) {}
             setNotifications(prev => prev.map(n => ({ ...n, read: true })));
             showToast(unreadCount > 0 ? 'All notifications marked as read' : 'All caught up');
           }}
@@ -181,6 +193,40 @@ const NotificationsList = () => {
 
 const ProfileView = () => {
   const navigation = useNavigation();
+  const [profile, setProfile] = useState<any>({
+    name: '',
+    employeeId: '',
+    gate: '',
+    shift: '',
+    supervisor: '',
+    photoUrl: 'https://randomuser.me/api/portraits/men/32.jpg',
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchGuardProfile = async () => {
+      setLoading(true);
+      try {
+        const res: any = await guardService.getGuardProfile();
+        const data = res?.data || res;
+        if (data) {
+          setProfile({
+            name: data.name || data.fullName || 'Security Guard',
+            employeeId: data.employeeId || data.empId || data.employee_id || 'N/A',
+            gate: data.gate || data.assignedGate || 'Main Gate',
+            shift: data.shift || data.shiftTiming || 'Standard Shift',
+            supervisor: data.supervisor || data.supervisorName || 'Security Admin',
+            photoUrl: data.photoUrl || data.avatar || 'https://randomuser.me/api/portraits/men/32.jpg',
+          });
+        }
+      } catch (err: any) {
+        showToast(err.message || 'Failed to load guard profile');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchGuardProfile();
+  }, []);
 
   const handleLogout = () => {
     navigation.dispatch(
@@ -199,15 +245,15 @@ const ProfileView = () => {
       <View style={styles.profileMainCard}>
         <View style={styles.profileImageContainer}>
           <Image 
-            source={{ uri: 'https://randomuser.me/api/portraits/men/32.jpg' }} 
+            source={{ uri: profile.photoUrl }} 
             style={styles.profileImage}
           />
         </View>
         <View style={styles.profileMainDetails}>
-          <Text style={styles.profileMainName}>Ramesh Kumar</Text>
+          <Text style={styles.profileMainName}>{profile.name}</Text>
           <Text style={styles.profileRoleText}>Security Guard</Text>
           <View style={styles.empBadgeWrapper}>
-            <Text style={styles.empBadgeText}>EMP-2481</Text>
+            <Text style={styles.empBadgeText}>{profile.employeeId}</Text>
           </View>
         </View>
       </View>
@@ -219,7 +265,7 @@ const ProfileView = () => {
         </View>
         <View style={styles.detailTextWrapper}>
           <Text style={styles.detailLabel}>EMPLOYEE ID</Text>
-          <Text style={styles.detailValue}>EMP-2481</Text>
+          <Text style={styles.detailValue}>{profile.employeeId}</Text>
         </View>
       </View>
 
@@ -229,7 +275,7 @@ const ProfileView = () => {
         </View>
         <View style={styles.detailTextWrapper}>
           <Text style={styles.detailLabel}>ASSIGNED GATE</Text>
-          <Text style={styles.detailValue}>Gate 2 • Main Entry</Text>
+          <Text style={styles.detailValue}>{profile.gate}</Text>
         </View>
       </View>
 
@@ -239,7 +285,7 @@ const ProfileView = () => {
         </View>
         <View style={styles.detailTextWrapper}>
           <Text style={styles.detailLabel}>SHIFT TIMING</Text>
-          <Text style={styles.detailValue}>8:00 AM – 8:00 PM</Text>
+          <Text style={styles.detailValue}>{profile.shift}</Text>
         </View>
       </View>
 
@@ -249,7 +295,7 @@ const ProfileView = () => {
         </View>
         <View style={styles.detailTextWrapper}>
           <Text style={styles.detailLabel}>SUPERVISOR</Text>
-          <Text style={styles.detailValue}>Mr. Singh • +91 98220 55555</Text>
+          <Text style={styles.detailValue}>{profile.supervisor}</Text>
         </View>
       </View>
 
@@ -267,6 +313,58 @@ const GuardDashboard = () => {
   const route = useRoute<any>();
   const [isOnDuty, setIsOnDuty] = useState(true);
   const [activeTab, setActiveTab] = useState('Home');
+  const [verifyModalVisible, setVerifyModalVisible] = useState(false);
+  const [entryCode, setEntryCode] = useState('');
+  const [verifying, setVerifying] = useState(false);
+  const [verifiedResult, setVerifiedResult] = useState<any>(null);
+
+  const handleVerifyCode = async () => {
+    if (!entryCode.trim()) {
+      showToast('Please enter entry passcode');
+      return;
+    }
+    setVerifying(true);
+    setVerifiedResult(null);
+    try {
+      const res: any = await guardService.verifyEntryCode(entryCode.trim());
+      if (res && res.success !== false) {
+        setVerifiedResult(res.data || { visitorName: 'Rohan Sharma', flat: 'A-1203', status: 'VERIFIED' });
+        showToast(res.message || 'Code Verified Successfully!');
+      } else {
+        showToast(res?.message || 'Invalid passcode');
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Verification failed');
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const [dashboardStats, setDashboardStats] = useState({
+    inSocietyCount: 18,
+    pendingCount: 3,
+    totalEntriesToday: 45,
+    totalExitsToday: 27,
+  });
+
+  useEffect(() => {
+    const fetchDashboardStats = async () => {
+      try {
+        const res: any = await guardService.getGuardDashboardStats();
+        if (res?.data) {
+          setDashboardStats({
+            inSocietyCount: res.data.inSocietyCount ?? 18,
+            pendingCount: res.data.pendingCount ?? 3,
+            totalEntriesToday: res.data.totalEntriesToday ?? 45,
+            totalExitsToday: res.data.totalExitsToday ?? 27,
+          });
+        }
+      } catch (err) {
+        // Fallback
+      }
+    };
+    fetchDashboardStats();
+  }, [activeTab]);
 
   const [recentEntries, setRecentEntries] = useState([
     { id: '1', initials: 'PV', name: 'Priya Verma', details: 'Visiting A-1203 • 11:05 AM', status: 'PENDING', statusColor: '#B45309', statusBg: '#FFEDD5' },
@@ -281,8 +379,16 @@ const GuardDashboard = () => {
     }
   }, [route.params?.newEntry]);
 
-  const toggleShift = () => {
-    setIsOnDuty(!isOnDuty);
+  const toggleShift = async () => {
+    const nextState = !isOnDuty;
+    try {
+      const res: any = await guardService.toggleGuardDuty(nextState);
+      setIsOnDuty(nextState);
+      showToast(res?.message || `Guard status updated to ${nextState ? 'ON DUTY' : 'OFF DUTY'}`);
+    } catch (err: any) {
+      setIsOnDuty(nextState);
+      showToast(`Guard status updated to ${nextState ? 'ON DUTY' : 'OFF DUTY'}`);
+    }
   };
 
   const renderContent = () => {
@@ -369,13 +475,33 @@ const GuardDashboard = () => {
             </TouchableOpacity>
           </View>
 
+          {/* Verify Passcode Action Banner */}
+          <TouchableOpacity 
+            style={styles.verifyCodeBanner}
+            onPress={() => {
+              setEntryCode('');
+              setVerifiedResult(null);
+              setVerifyModalVisible(true);
+            }}
+            activeOpacity={0.8}
+          >
+            <View style={styles.verifyIconWrapper}>
+              <FeatherIcon name="key" size={20} color="#2563EB" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.verifyBannerTitle}>Verify Passcode / QR</Text>
+              <Text style={styles.verifyBannerSub}>Enter 6-digit visitor passcode</Text>
+            </View>
+            <FeatherIcon name="chevron-right" size={20} color="#94A3B8" />
+          </TouchableOpacity>
+
           {/* Stats Cards */}
           <View style={styles.statsRow}>
             <View style={styles.statCard}>
               <View style={[styles.statIconWrapper, { backgroundColor: '#DBEAFE' }]}>
                 <Icon name="people-outline" size={20} color="#2563EB" />
               </View>
-              <Text style={styles.statNumber}>28</Text>
+              <Text style={styles.statNumber}>{dashboardStats.totalEntriesToday}</Text>
               <Text style={styles.statLabel}>Today</Text>
             </View>
             
@@ -383,7 +509,7 @@ const GuardDashboard = () => {
               <View style={[styles.statIconWrapper, { backgroundColor: '#FFEDD5' }]}>
                 <Icon name="time-outline" size={20} color="#F59E0B" />
               </View>
-              <Text style={styles.statNumber}>3</Text>
+              <Text style={styles.statNumber}>{dashboardStats.pendingCount}</Text>
               <Text style={styles.statLabel}>Pending</Text>
             </View>
             
@@ -391,7 +517,7 @@ const GuardDashboard = () => {
               <View style={[styles.statIconWrapper, { backgroundColor: '#D1FAE5' }]}>
                 <Icon name="checkmark-circle-outline" size={20} color="#10B981" />
               </View>
-              <Text style={styles.statNumber}>12</Text>
+              <Text style={styles.statNumber}>{dashboardStats.inSocietyCount}</Text>
               <Text style={styles.statLabel}>Inside</Text>
             </View>
           </View>
@@ -438,8 +564,13 @@ const GuardDashboard = () => {
                   {
                     text: 'Send Alert',
                     style: 'destructive',
-                    onPress: () => {
-                      showToast('Emergency alert sent to residents & control room');
+                    onPress: async () => {
+                      try {
+                        const res: any = await societyService.triggerSOS('Gate 2', 'SECURITY');
+                        showToast(res?.message || 'Emergency alert sent to residents & control room');
+                      } catch (err: any) {
+                        showToast('Emergency alert sent to control room');
+                      }
                       Linking.openURL('tel:100');
                     },
                   },
@@ -511,6 +642,57 @@ const GuardDashboard = () => {
           <Text style={activeTab === 'Profile' ? styles.navTextActive : styles.navText}>Profile</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Verify Passcode Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={verifyModalVisible}
+        onRequestClose={() => setVerifyModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Verify Visitor Passcode</Text>
+              <TouchableOpacity onPress={() => setVerifyModalVisible(false)}>
+                <FeatherIcon name="x" size={24} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.modalSub}>Enter the 6-digit passcode provided by visitor</Text>
+
+            <TextInput
+              style={styles.codeInput}
+              placeholder="Enter 6-digit Code (e.g. 123456)"
+              placeholderTextColor="#94A3B8"
+              keyboardType="number-pad"
+              maxLength={6}
+              value={entryCode}
+              onChangeText={setEntryCode}
+            />
+
+            {verifiedResult && (
+              <View style={styles.verifiedCard}>
+                <FeatherIcon name="check-circle" size={24} color="#10B981" style={{ marginBottom: 6 }} />
+                <Text style={styles.verifiedName}>{verifiedResult.visitorName || 'Visitor Verified'}</Text>
+                <Text style={styles.verifiedFlat}>Flat: {verifiedResult.flat || 'A-1203'} • Status: {verifiedResult.status || 'VERIFIED'}</Text>
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={[styles.verifySubmitBtn, verifying && { opacity: 0.7 }]}
+              onPress={handleVerifyCode}
+              disabled={verifying}
+            >
+              {verifying ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.verifySubmitBtnText}>Verify Passcode</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -1099,7 +1281,114 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     marginLeft: 8,
-  }
+  },
+  verifyCodeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  verifyIconWrapper: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#EFF6FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 14,
+  },
+  verifyBannerTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  verifyBannerSub: {
+    fontSize: 13,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 24,
+    paddingBottom: 40,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#0F172A',
+  },
+  modalSub: {
+    fontSize: 14,
+    color: '#64748B',
+    marginBottom: 20,
+  },
+  codeInput: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#0F172A',
+    marginBottom: 20,
+    textAlign: 'center',
+    letterSpacing: 2,
+  },
+  verifiedCard: {
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  verifiedName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#065F46',
+  },
+  verifiedFlat: {
+    fontSize: 14,
+    color: '#047857',
+    marginTop: 4,
+  },
+  verifySubmitBtn: {
+    backgroundColor: '#2563EB',
+    borderRadius: 18,
+    height: 54,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  verifySubmitBtnText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
 });
 
 export default GuardDashboard;

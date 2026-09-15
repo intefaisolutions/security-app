@@ -1,7 +1,8 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Linking, Dimensions } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Linking, Dimensions, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
+import { societyService } from '../../services/societyService';
 
 const { width } = Dimensions.get('window');
 const cardWidth = (width - 60) / 2;
@@ -16,6 +17,32 @@ const services = [
 ];
 
 const ServicesScreen = () => {
+  const [serviceList, setServiceList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchServices = async () => {
+      setLoading(true);
+      try {
+        const res: any = await societyService.getServicesDirectory();
+        const list = res?.data || res || [];
+        if (Array.isArray(list)) {
+          setServiceList(list.map((item: any, idx: number) => ({
+            id: item.id || item._id || String(idx),
+            title: item.name || item.title || 'Local Service',
+            rating: item.rating || '4.8',
+            phone: item.phone || item.contact || '',
+            image: item.image || services[idx % services.length]?.image || 'https://images.unsplash.com/photo-1621905252507-b35492cc74b4?auto=format&fit=crop&q=80&w=300&h=200',
+          })));
+        }
+      } catch (err: any) {
+        // Handled silently or empty state
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchServices();
+  }, []);
   const handleCall = (phone: string) => {
     Linking.openURL(`tel:${phone}`);
   };
@@ -29,7 +56,7 @@ const ServicesScreen = () => {
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.grid}>
-          {services.map((service) => (
+          {serviceList.map((service) => (
             <View key={service.id} style={styles.card}>
               <Image source={{ uri: service.image }} style={styles.image} />
               

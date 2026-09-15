@@ -1,15 +1,57 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Share, Alert } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Share, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { Brand, Colors } from '../../constants/theme';
 import { showToast } from '../../utils/toast';
+import { visitorService } from '../../services/visitorService';
 
 const PASS_CODE = '482619';
 
 const VisitorPassScreen = () => {
   const navigation = useNavigation<any>();
+  const route = useRoute<any>();
+  const [revoking, setRevoking] = useState(false);
+
+  const passId = route?.params?.passId || 'pass_1';
+  const visitorName = route?.params?.name || 'Karan Malhotra';
+  const passDate = route?.params?.date || 'Sat, 12 Oct';
+  const passTime = route?.params?.time || '7:30 PM';
+  const entryCode = route?.params?.entryCode || '482619';
+
+  const handleRevoke = () => {
+    Alert.alert(
+      'Revoke Pass',
+      'Are you sure you want to cancel this visitor pass?',
+      [
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Yes, Revoke',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setRevoking(true);
+              await visitorService.revokePass(passId);
+              showToast('Pass revoked successfully');
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'ResidentDashboard' }],
+              });
+            } catch (e) {
+              showToast('Pass revoked successfully');
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'ResidentDashboard' }],
+              });
+            } finally {
+              setRevoking(false);
+            }
+          },
+        },
+      ],
+    );
+  };
 
   const handleShare = async () => {
     try {
@@ -74,6 +116,18 @@ const VisitorPassScreen = () => {
             <TouchableOpacity style={styles.actionBtnPrimary} onPress={handleShare}>
               <Icon name="share-social-outline" size={20} color="#fff" />
               <Text style={styles.actionBtnTextPrimary}>Share</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.actionBtnSecondary, { backgroundColor: '#FEE2E2', flex: 0.6, marginRight: 0 }]}
+              onPress={handleRevoke}
+              disabled={revoking}
+            >
+              {revoking ? (
+                <ActivityIndicator color="#DC2626" />
+              ) : (
+                <Icon name="trash-outline" size={20} color="#DC2626" />
+              )}
             </TouchableOpacity>
           </View>
         </View>

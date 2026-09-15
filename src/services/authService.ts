@@ -1,5 +1,4 @@
 import { apiClient, setAuthToken } from './apiClient';
-import { API_CONFIG } from './apiConfig';
 
 export interface LoginParams {
   identifier: string;
@@ -8,68 +7,65 @@ export interface LoginParams {
 }
 
 export interface VerifyOtpParams {
-  sessionId: string;
+  identifier: string;
   otp: string;
-  role: 'resident' | 'guard';
+  role?: 'resident' | 'guard';
 }
 
 export const authService = {
-  // Login with Mobile Number / Guard Employee ID
+  // Login with Mobile Number
   async login(params: LoginParams) {
-    if (API_CONFIG.USE_MOCK_FALLBACK) {
-      return {
-        success: true,
-        message: 'OTP sent to mobile number',
-        data: { sessionId: 'mock_session_123', expiresIn: 30 },
-      };
-    }
     return apiClient.post('/auth/login', params);
   },
 
-  // Verify 6-digit OTP
+  // Verify 4-digit OTP
   async verifyOtp(params: VerifyOtpParams) {
-    if (API_CONFIG.USE_MOCK_FALLBACK) {
-      const mockToken = 'mock_jwt_token_guardconnect_2026';
-      setAuthToken(mockToken);
-      return {
-        success: true,
-        message: 'Login successful',
-        data: {
-          token: mockToken,
-          user: {
-            id: 'usr_101',
-            name: params.role === 'guard' ? 'Ramesh Kumar (Guard)' : 'Arjun Mehta',
-            role: params.role,
-            flat: params.role === 'resident' ? 'A-1203' : undefined,
-            tower: params.role === 'resident' ? 'Tower A' : undefined,
-          },
-        },
-      };
-    }
-
-    const response: any = await apiClient.post('/auth/verify-otp', params);
+    const response: any = await apiClient.post('/auth/verify-otp', {
+      identifier: params.identifier,
+      otp: params.otp,
+      role: params.role,
+    });
     if (response?.data?.token) {
       setAuthToken(response.data.token);
+      // Sync FCM push device token
+      try {
+        await authService.updateDeviceToken('fcm_token_guardconnect_2026');
+      } catch (e) {}
     }
     return response;
   },
 
   // Resend OTP
-  async resendOtp(sessionId: string) {
-    if (API_CONFIG.USE_MOCK_FALLBACK) {
-      return { success: true, message: 'OTP resent successfully' };
-    }
-    return apiClient.post('/auth/resend-otp', { sessionId });
+  async resendOtp(identifier: string) {
+    return apiClient.post('/auth/resend-otp', {
+      phone: identifier,
+      identifier,
+    });
   },
 
   // Logout
   async logout() {
-    if (API_CONFIG.USE_MOCK_FALLBACK) {
+    try {
+      const result = await apiClient.post('/auth/logout');
+      return result;
+    } finally {
       setAuthToken(null);
-      return { success: true, message: 'Logged out successfully' };
     }
-    const result = await apiClient.post('/auth/logout');
-    setAuthToken(null);
-    return result;
+  },
+
+  // Get Logged-in User Profile
+  async getUserProfile() {
+    return apiClient.get('/user/profile');
+  },
+
+  // Update User Profile
+  async updateUserProfile(data: { name?: string; email?: string; emergencyContact?: string }) {
+    return apiClient.put('/user/profile', data);
+  },
+
+  // Register / Sync Push Device Token
+  async updateDeviceToken(deviceToken: string) {
+    return apiClient.post('/user/device-token', { deviceToken });
   },
 };
+

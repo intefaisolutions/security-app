@@ -1,45 +1,60 @@
 import React, { useState } from 'react';
 import { 
   View, Text, StyleSheet, TouchableOpacity, SafeAreaView, 
-  StatusBar, ScrollView, Image 
+  StatusBar, ScrollView, Image, ActivityIndicator 
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import FeatherIcon from 'react-native-vector-icons/Feather';
 import { useNavigation } from '@react-navigation/native';
 import { showToast } from '../../utils/toast';
+import { guardService } from '../../services/guardService';
+import { visitorService } from '../../services/visitorService';
 
 const VisitorExitScreen = () => {
   const navigation = useNavigation();
-  
-  const initialVisitors = [
-    {
-      id: '1',
-      name: 'Rahul Sharma',
-      purpose: 'Amazon Delivery',
-      details: 'In at 10:24 AM · Gate 2',
-      image: 'https://randomuser.me/api/portraits/men/32.jpg',
-    },
-    {
-      id: '2',
-      name: 'Priya Verma',
-      purpose: 'Guest — Family visit',
-      details: 'In at 11:05 AM · Gate 1',
-      image: 'https://randomuser.me/api/portraits/women/44.jpg',
-    },
-    {
-      id: '3',
-      name: 'Suresh Kumar',
-      purpose: 'Swiggy Order',
-      details: 'In at 12:12 PM · Gate 2',
-      image: 'https://randomuser.me/api/portraits/men/22.jpg',
-    },
-  ];
+  const [exitingId, setExitingId] = useState<string | null>(null);
+  const [visitors, setVisitors] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  const [visitors, setVisitors] = useState(initialVisitors);
+  React.useEffect(() => {
+    const fetchVisitorsInside = async () => {
+      setLoading(true);
+      try {
+        const res: any = await visitorService.getVisitorHistory({ status: 'APPROVED' });
+        const list = res?.data || res || [];
+        if (Array.isArray(list)) {
+          setVisitors(list.map((v: any, idx: number) => ({
+            id: v.id || v._id || String(idx),
+            name: v.visitorName || v.name || 'Visitor',
+            purpose: v.category || v.type || 'Guest',
+            details: `In at ${v.entryTime || v.in || '—'} · ${v.gate || 'Main Gate'}`,
+            image: v.image || v.photoUrl || `https://randomuser.me/api/portraits/men/${(idx % 50) + 1}.jpg`,
+          })));
+        }
+      } catch (err: any) {
+        showToast(err.message || 'Failed to fetch visitors inside');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchVisitorsInside();
+  }, []);
 
-  const handleExit = (id: string) => {
-    showToast('Exit recorded');
-    setVisitors(visitors.filter(v => v.id !== id));
+  const handleExit = async (id: string) => {
+    setExitingId(id);
+    try {
+      const res: any = await guardService.markVisitorExit(id);
+      if (res && res.success !== false) {
+        showToast('Exit recorded successfully');
+        setVisitors(prev => prev.filter(v => v.id !== id));
+      } else {
+        showToast(res?.message || 'Failed to record exit');
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Failed to record exit');
+    } finally {
+      setExitingId(null);
+    }
   };
 
   return (
@@ -69,12 +84,19 @@ const VisitorExitScreen = () => {
               </View>
             </View>
             <TouchableOpacity 
-              style={styles.exitButton} 
+              style={[styles.exitButton, exitingId === visitor.id && { opacity: 0.7 }]} 
               onPress={() => handleExit(visitor.id)}
+              disabled={exitingId === visitor.id}
               activeOpacity={0.8}
             >
-              <FeatherIcon name="log-out" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-              <Text style={styles.exitButtonText}>Exit</Text>
+              {exitingId === visitor.id ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <FeatherIcon name="log-out" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                  <Text style={styles.exitButtonText}>Exit</Text>
+                </>
+              )}
             </TouchableOpacity>
           </View>
         ))}

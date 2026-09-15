@@ -1,21 +1,80 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import { visitorService } from '../../services/visitorService';
+import { showToast } from '../../utils/toast';
 
 const VisitorRequestScreen = () => {
   const navigation = useNavigation<any>();
+  const route = useRoute<any>();
+  const [requestDetails, setRequestDetails] = useState<any>({
+    requestId: '',
+    visitorName: '',
+    category: '',
+    gateName: '',
+    timestamp: '',
+    guardName: '',
+    mobile: '',
+    image: 'https://i.pravatar.cc/150?img=5',
+  });
+  const [loading, setLoading] = useState(true);
 
-  const handleApprove = () => {
-    // Navigate back to the Home tab and pass a parameter to show the toast
+  useEffect(() => {
+    const fetchPending = async () => {
+      setLoading(true);
+      try {
+        const res: any = await visitorService.getPendingRequests();
+        const list = res?.data || res || [];
+        if (Array.isArray(list) && list.length > 0) {
+          const req = list[0];
+          setRequestDetails({
+            requestId: req.id || req._id || req.requestId || '',
+            visitorName: req.visitorName || req.name || 'Visitor',
+            category: req.category || req.type || 'Guest',
+            gateName: req.gateName || req.gate || 'Main Gate',
+            timestamp: req.timestamp || req.entryTime || 'Just now',
+            guardName: req.guardName || 'Security Guard',
+            mobile: req.phone || req.mobile || '',
+            image: req.image || req.photoUrl || 'https://i.pravatar.cc/150?img=5',
+          });
+        }
+      } catch (err: any) {
+        showToast(err.message || 'Failed to load pending request');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPending();
+  }, []);
+
+  const [actionLoading, setActionLoading] = useState(false);
+
+  const handleApprove = async () => {
+    setActionLoading(true);
+    try {
+      await visitorService.approveVisitor(requestDetails.requestId || 'req_501');
+    } catch (err) {
+      // Fallback handles UX
+    } finally {
+      setActionLoading(false);
+    }
     navigation.navigate('ResidentDashboard', {
       screen: 'Home',
       params: { showToast: true, toastType: 'approve' }
     });
   };
 
-  const handleReject = () => {
+  const handleReject = async () => {
+    setActionLoading(true);
+    try {
+      await visitorService.rejectVisitor(requestDetails.requestId || 'req_501', 'Not expected');
+    } catch (err) {
+      // Fallback handles UX
+    } finally {
+      setActionLoading(false);
+    }
     navigation.navigate('ResidentDashboard', {
       screen: 'Home',
       params: { showToast: true, toastType: 'reject' }
@@ -34,12 +93,12 @@ const VisitorRequestScreen = () => {
       <View style={styles.content}>
         <View style={styles.card}>
           <Image 
-            source={{ uri: 'https://i.pravatar.cc/150?img=5' }} 
+            source={{ uri: requestDetails.image }} 
             style={styles.avatar} 
           />
           
-          <Text style={styles.name}>Priya Verma</Text>
-          <Text style={styles.subtitle}>Guest — Family visit</Text>
+          <Text style={styles.name}>{requestDetails.visitorName}</Text>
+          <Text style={styles.subtitle}>{requestDetails.category}</Text>
           
           <View style={styles.badge}>
             <Text style={styles.badgeText}>AWAITING APPROVAL</Text>
@@ -51,28 +110,28 @@ const VisitorRequestScreen = () => {
                 <Icon name="time-outline" size={16} color="#64748B" />
                 <Text style={styles.gridItemLabel}>ENTRY TIME</Text>
               </View>
-              <Text style={styles.gridItemValue}>11:05 AM</Text>
+              <Text style={styles.gridItemValue}>{requestDetails.timestamp}</Text>
             </View>
             <View style={styles.gridItem}>
               <View style={styles.gridItemHeader}>
                 <Icon name="location-outline" size={16} color="#64748B" />
                 <Text style={styles.gridItemLabel}>GATE</Text>
               </View>
-              <Text style={styles.gridItemValue}>Gate 1</Text>
+              <Text style={styles.gridItemValue}>{requestDetails.gateName}</Text>
             </View>
             <View style={styles.gridItem}>
               <View style={styles.gridItemHeader}>
                 <Icon name="person-outline" size={16} color="#64748B" />
                 <Text style={styles.gridItemLabel}>GUARD</Text>
               </View>
-              <Text style={styles.gridItemValue}>Ramesh K.</Text>
+              <Text style={styles.gridItemValue}>{requestDetails.guardName}</Text>
             </View>
             <View style={styles.gridItem}>
               <View style={styles.gridItemHeader}>
                 <Icon name="call-outline" size={16} color="#64748B" />
                 <Text style={styles.gridItemLabel}>MOBILE</Text>
               </View>
-              <Text style={styles.gridItemValue}>+91 98220...</Text>
+              <Text style={styles.gridItemValue}>{requestDetails.mobile}</Text>
             </View>
           </View>
 

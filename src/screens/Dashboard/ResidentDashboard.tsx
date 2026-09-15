@@ -18,6 +18,8 @@ import PendingRequestCard from '../../components/PendingRequestCard';
 import VisitorCard from '../../components/VisitorCard';
 import NewsCard from '../../components/NewsCard';
 import { showToast as showAppToast } from '../../utils/toast';
+import { visitorService } from '../../services/visitorService';
+import { societyService } from '../../services/societyService';
 
 const GUARD_HELPLINE = 'tel:100';
 const SOCIETY_SECURITY = 'tel:+919876543210';
@@ -28,6 +30,47 @@ const ResidentDashboard = () => {
   const isFocused = useIsFocused();
   const [showToast, setShowToast] = useState(false);
   const [toastType, setToastType] = useState('approve');
+  const [activePasses, setActivePasses] = useState<any[]>([]);
+
+  const [societyNews, setSocietyNews] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchActivePasses = async () => {
+      try {
+        const res: any = await visitorService.getActivePasses();
+        const list = res?.data || res || [];
+        if (Array.isArray(list)) {
+          setActivePasses(list);
+        }
+      } catch (err: any) {
+        // Handled silently
+      }
+    };
+
+    const fetchNews = async () => {
+      try {
+        const res: any = await societyService.getSocietyNews();
+        const list = res?.data || res || [];
+        if (Array.isArray(list)) {
+          setSocietyNews(list.map((item: any) => ({
+            id: item.id || item._id || String(Math.random()),
+            title: item.title,
+            subtitle: item.category || item.summary || 'Notice',
+            letter: item.title ? item.title.charAt(0).toUpperCase() : 'N',
+            color: '#DBEAFE',
+            textColor: '#1D4ED8',
+          })));
+        }
+      } catch (err: any) {
+        // Handled silently
+      }
+    };
+
+    if (isFocused) {
+      fetchActivePasses();
+      fetchNews();
+    }
+  }, [isFocused]);
 
   useEffect(() => {
     if (isFocused && route.params?.showToast) {
@@ -161,8 +204,13 @@ const ResidentDashboard = () => {
                     {
                       text: 'Call 100',
                       style: 'destructive',
-                      onPress: () => {
-                        showAppToast('SOS sent to control room');
+                      onPress: async () => {
+                        try {
+                          const res: any = await societyService.triggerSOS('A-1203', 'SECURITY');
+                          showAppToast(res?.message || 'SOS sent to control room');
+                        } catch (err) {
+                          showAppToast('SOS sent to control room');
+                        }
                         Linking.openURL(GUARD_HELPLINE);
                       },
                     },
@@ -215,20 +263,16 @@ const ResidentDashboard = () => {
             <Text style={styles.heading}>Community News</Text>
             <Text style={styles.linkText}>All</Text>
           </View>
-          <NewsCard 
-            title="Water tanker on Wed 6 AM" 
-            subtitle="Water Supply" 
-            letter="W" 
-            color="#DBEAFE" 
-            textColor="#1D4ED8" 
-          />
-          <NewsCard 
-            title="Lift servicing — Tower B" 
-            subtitle="Maintenance" 
-            letter="M" 
-            color="#FFEDD5" 
-            textColor="#9A3412" 
-          />
+          {societyNews.map((news) => (
+            <NewsCard 
+              key={news.id}
+              title={news.title} 
+              subtitle={news.subtitle} 
+              letter={news.letter} 
+              color={news.color} 
+              textColor={news.textColor} 
+            />
+          ))}
         </View>
          
       </ScrollView>

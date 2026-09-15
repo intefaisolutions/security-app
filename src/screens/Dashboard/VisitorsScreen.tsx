@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
+import { visitorService } from '../../services/visitorService';
+import { showToast } from '../../utils/toast';
 
 const filterTabs = ['All', 'Approved', 'Pending', 'Rejected'];
 
@@ -14,11 +16,42 @@ const visitorsData = [
 
 const VisitorsScreen = () => {
   const [activeTab, setActiveTab] = useState('All');
+  const [visitorsList, setVisitorsList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
   const navigation = useNavigation<any>();
 
+  useEffect(() => {
+    const fetchHistory = async () => {
+      setLoading(true);
+      try {
+        const statusFilter = activeTab === 'All' ? undefined : activeTab.toUpperCase();
+        const res: any = await visitorService.getVisitorHistory({ status: statusFilter });
+        const list = res?.data || res || [];
+        if (Array.isArray(list)) {
+          setVisitorsList(list.map((item: any, idx: number) => ({
+            id: item.id || item._id || String(idx),
+            name: item.visitorName || item.name || 'Visitor',
+            type: item.category || item.type || 'Guest',
+            status: item.status ? String(item.status).toUpperCase() : 'APPROVED',
+            in: item.entryTime || item.in || '—',
+            out: item.exitTime || item.out || '—',
+            gate: item.gate || 'Main Gate',
+            image: item.image || item.photoUrl || `https://i.pravatar.cc/100?img=${(idx % 20) + 1}`,
+          })));
+        }
+      } catch (err: any) {
+        showToast(err.message || 'Failed to load visitor history');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchHistory();
+  }, [activeTab]);
+
   const filteredData = activeTab === 'All' 
-    ? visitorsData 
-    : visitorsData.filter(item => item.status === activeTab.toUpperCase());
+    ? visitorsList 
+    : visitorsList.filter(item => item.status === activeTab.toUpperCase());
 
   return (
     <SafeAreaView style={styles.container}>

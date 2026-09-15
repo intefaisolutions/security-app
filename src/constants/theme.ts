@@ -29,6 +29,6 @@ export const Colors = {
 } as const;
 
 export const DemoAuth = {
-  resident: { username: '9876543210', password: '1234', otp: '123456' },
-  guard: { username: 'EMP2481', password: '1234', otp: '123456' },
+  resident: { username: '9876543210', otp: '1234' },
+  guard: { username: '7803856559', otp: '1234' },
 } as const;

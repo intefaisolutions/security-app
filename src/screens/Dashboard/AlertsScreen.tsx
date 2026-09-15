@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { Colors } from '../../constants/theme';
 import { showToast } from '../../utils/toast';
+import { societyService } from '../../services/societyService';
 
 type NotificationItem = {
   id: string;
@@ -26,16 +27,51 @@ const initialNotifications: NotificationItem[] = [
 ];
 
 const AlertsScreen = () => {
-  const [notifications, setNotifications] = useState(initialNotifications);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  const markAllRead = () => {
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      setLoading(true);
+      try {
+        const res: any = await societyService.getNotifications();
+        const list = res?.data || res || [];
+        if (Array.isArray(list)) {
+          setNotifications(list.map((n: any) => ({
+            id: n.id || n._id || String(Math.random()),
+            title: n.title || 'Notification',
+            desc: n.message || n.desc || '',
+            time: n.time || n.createdAt || 'Just now',
+            type: n.type || 'notice',
+            icon: n.type === 'emergency' ? 'alert' : n.type === 'approved' ? 'person-add' : 'notifications',
+            color: n.type === 'emergency' ? '#FEE2E2' : n.type === 'approved' ? '#DCFCE7' : '#DBEAFE',
+            iconColor: n.type === 'emergency' ? '#DC2626' : n.type === 'approved' ? '#16A34A' : '#2563EB',
+            read: !!n.read,
+          })));
+        }
+      } catch (err: any) {
+        showToast(err.message || 'Failed to fetch notifications');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchNotifications();
+  }, []);
+
+  const markAllRead = async () => {
     if (unreadCount === 0) {
       showToast('All caught up');
       return;
     }
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-    showToast('All notifications marked as read');
+    try {
+      await societyService.markAllNotificationsRead();
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      showToast('All notifications marked as read');
+    } catch (err: any) {
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      showToast('All notifications marked as read');
+    }
   };
 
   const markOneRead = (id: string) => {

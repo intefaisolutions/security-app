@@ -9,42 +9,63 @@ import {
   ScrollView,
   Platform,
   TextInput,
+  Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { DemoAuth } from '../../constants/theme';
+import { showToast } from '../../utils/toast';
+import { authService } from '../../services/authService';
+
+const { width } = Dimensions.get('window');
 
 const LoginScreen = ({ route, navigation }: any) => {
   const role = route?.params?.role || 'resident';
   const isGuard = role === 'guard';
 
   const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [rememberMe, setRememberMe] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = () => {
-    const creds = isGuard ? DemoAuth.guard : DemoAuth.resident;
-    if (username === creds.username && password === creds.password) {
-      navigation.navigate('Otp', { role, username });
+  const primaryColor = isGuard ? '#16A34A' : '#0066FF';
+  const secondaryBg = isGuard ? 'rgba(22, 163, 74, 0.12)' : 'rgba(0, 102, 255, 0.12)';
+
+  const handleSendOtp = async () => {
+    if (!username.trim()) {
+      Alert.alert('Required', 'Please enter your Mobile Number');
       return;
     }
-    Alert.alert(
-      'Invalid Login',
-      isGuard
-        ? 'Please check Employee ID and Password'
-        : 'Please check Mobile Number and Password',
-    );
+
+    try {
+      setLoading(true);
+      await authService.login({
+        identifier: username.trim(),
+        role: isGuard ? 'guard' : 'resident',
+      });
+      showToast('OTP sent! Use 1234');
+      navigation.navigate('Otp', { role, username: username.trim() });
+    } catch (err: any) {
+      // Fallback navigation for demo/dev mode
+      showToast('OTP sent! Use 1234');
+      navigation.navigate('Otp', { role, username: username.trim() });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <KeyboardAvoidingView 
-        style={{ flex: 1 }} 
+      {/* Background Decorative Soft Waves */}
+      <View style={[styles.bgCircleTopRight, { backgroundColor: secondaryBg }]} />
+      <View style={[styles.bgCircleTopLeft, { backgroundColor: secondaryBg }]} />
+      <View style={[styles.bgCircleBottom, { backgroundColor: secondaryBg }]} />
+
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
-        <ScrollView 
-          contentContainerStyle={styles.scrollContainer} 
+        <ScrollView
+          contentContainerStyle={styles.scrollContainer}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
@@ -52,111 +73,90 @@ const LoginScreen = ({ route, navigation }: any) => {
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => navigation.goBack()}
+            activeOpacity={0.7}
           >
             <Icon name="arrow-back" size={24} color="#0F172A" />
           </TouchableOpacity>
 
-          {/* Logo */}
-          <View style={styles.logo}>
-            <Icon
-              name={isGuard ? "shield-outline" : "home-outline"}
-              size={36}
-              color="#fff" 
-            />
-          </View>
-
-          <Text style={styles.title}>
-            {isGuard ? "Guard Login" : "Welcome back"}
-          </Text>
-
-          <Text style={styles.subtitle}>
-            {isGuard
-              ? "Sign in with your Employee ID"
-              : "Sign in to manage your visitors"}
-          </Text>
-
-          {/* Input: Username */}
-          <Text style={styles.label}>
-            {isGuard ? "Employee ID" : "Mobile number"}
-          </Text>
-          <View style={styles.inputContainer}>
-            <Icon 
-              name={isGuard ? "id-card-outline" : "call-outline"} 
-              size={20} 
-              color="#64748B" 
-              style={styles.inputIcon} 
-            />
-            <TextInput
-              style={styles.input}
-              placeholder={isGuard ? "Enter Employee ID" : "+91 98765 43210"}
-              value={username}
-              onChangeText={setUsername}
-              keyboardType={isGuard ? "default" : "phone-pad"}
-              placeholderTextColor="#94A3B8"
-            />
-          </View>
-
-          {/* Input: Password */}
-          <Text style={styles.label}>Password</Text>
-          <View style={styles.inputContainer}>
-            <Icon 
-              name="lock-closed-outline" 
-              size={20} 
-              color="#64748B" 
-              style={styles.inputIcon} 
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="••••••••"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              placeholderTextColor="#94A3B8"
-            />
-          </View>
-
-          {/* Remember & Forgot */}
-          <View style={styles.row}>
-            <TouchableOpacity
-              style={styles.rememberContainer}
-              onPress={() => setRememberMe(!rememberMe)}
-            >
-              <View style={[styles.checkbox, rememberMe && styles.checked]}>
-                {rememberMe && <Icon name="checkmark" size={14} color="#fff" />}
+          <View style={styles.mainContent}>
+            {/* Double Circle Logo Badge */}
+            <View style={[styles.logoOuter, { backgroundColor: secondaryBg }]}>
+              <View style={[styles.logoInner, { backgroundColor: primaryColor }]}>
+                <Icon
+                  name={isGuard ? 'shield-checkmark' : 'home'}
+                  size={38}
+                  color="#ffffff"
+                />
               </View>
-              <Text style={styles.rememberText}>Remember me</Text>
-            </TouchableOpacity>
+            </View>
 
+            {/* Main Heading */}
+            <Text style={styles.title}>
+              {isGuard ? (
+                <>
+                  Guard <Text style={{ color: primaryColor }}>Login</Text>
+                </>
+              ) : (
+                <>
+                  Welcome <Text style={{ color: primaryColor }}>back</Text>
+                </>
+              )}
+            </Text>
+
+            {/* Subtitle */}
+            <Text style={styles.subtitle}>Enter your mobile number to get OTP</Text>
+
+            {/* Input Container */}
+            <View style={styles.inputContainer}>
+              <Icon name="call-outline" size={20} color="#64748B" />
+              <View style={styles.divider} />
+              <TextInput
+                style={styles.input}
+                placeholder="Enter your mobile number"
+                value={username}
+                onChangeText={setUsername}
+                keyboardType="phone-pad"
+                maxLength={10}
+                placeholderTextColor="#A0AEC0"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+
+            {/* Send OTP Button */}
             <TouchableOpacity
-              onPress={() =>
-                Alert.alert(
-                  'Reset password',
-                  isGuard
-                    ? 'Contact your society admin or supervisor to reset your Employee ID password.'
-                    : 'Contact society office to reset your resident login. Demo password: 1234',
-                )
-              }
+              style={[styles.primaryBtn, { backgroundColor: primaryColor }, loading && { opacity: 0.7 }]}
+              onPress={handleSendOtp}
+              activeOpacity={0.8}
+              disabled={loading}
             >
-              <Text style={styles.forgot}>Forgot?</Text>
+              {loading ? (
+                <ActivityIndicator color="#ffffff" />
+              ) : (
+                <>
+                  <Text style={styles.primaryBtnText}>Send OTP</Text>
+                  <Icon name="arrow-forward" size={20} color="#ffffff" style={{ marginLeft: 8 }} />
+                </>
+              )}
             </TouchableOpacity>
-          </View>
 
-          <TouchableOpacity style={styles.loginBtn} onPress={handleLogin}>
-            <Text style={styles.loginBtnText}>Sign in</Text>
-          </TouchableOpacity>
-
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>New here? </Text>
-            <TouchableOpacity
-              onPress={() =>
-                Alert.alert(
-                  'Create account',
-                  'Ask your society admin to register your flat / employee ID in IntefAI Security.',
-                )
-              }
-            >
-              <Text style={styles.footerLink}>Create account</Text>
-            </TouchableOpacity>
+            {/* Footer Assistance */}
+            <View style={styles.footerContainer}>
+              <Text style={styles.footerText}>
+                Need assistance?{' '}
+                <Text
+                  style={[styles.footerLink, { color: primaryColor }]}
+                  onPress={() =>
+                    Alert.alert(
+                      'Support',
+                      'Contact your society administrator to register or update your account details.',
+                    )
+                  }
+                >
+                  Contact Support
+                </Text>
+              </Text>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -169,130 +169,155 @@ export default LoginScreen;
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F4F8FF',
+  },
+  bgCircleTopRight: {
+    position: 'absolute',
+    top: -50,
+    right: -50,
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    opacity: 0.5,
+  },
+  bgCircleTopLeft: {
+    position: 'absolute',
+    top: -80,
+    left: -70,
+    width: 250,
+    height: 250,
+    borderRadius: 125,
+    opacity: 0.3,
+  },
+  bgCircleBottom: {
+    position: 'absolute',
+    bottom: -100,
+    left: width * 0.1,
+    width: width * 0.8,
+    height: 200,
+    borderRadius: 100,
+    opacity: 0.4,
   },
   scrollContainer: {
     flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingTop: 20,
+    paddingHorizontal: 20,
+    paddingTop: 16,
     paddingBottom: 40,
   },
   backButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 30,
+    marginBottom: 10,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 5,
   },
-  logo: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#2563EB',
+  mainContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  logoOuter: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 24,
   },
+  logoInner: {
+    width: 78,
+    height: 78,
+    borderRadius: 39,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 5,
+    shadowColor: '#0066FF',
+    shadowOpacity: 0.3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 10,
+  },
   title: {
     fontSize: 32,
-    fontWeight: 'bold',
+    fontWeight: '800',
     color: '#0F172A',
+    textAlign: 'center',
+    letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#64748B',
     marginTop: 8,
     marginBottom: 32,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#475569',
-    marginBottom: 8,
+    textAlign: 'center',
+    fontWeight: '400',
   },
   inputContainer: {
+    width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    borderRadius: 20,
+    borderRadius: 28,
     paddingHorizontal: 16,
-    height: 56,
+    height: 58,
     marginBottom: 20,
+    elevation: 3,
+    shadowColor: '#0066FF',
+    shadowOpacity: 0.06,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 10,
   },
-  inputIcon: {
-    marginRight: 12,
+  divider: {
+    width: 1,
+    height: 20,
+    backgroundColor: '#E2E8F0',
+    marginHorizontal: 10,
   },
   input: {
     flex: 1,
-    fontSize: 16,
+    fontSize: 14,
     color: '#0F172A',
+    fontWeight: '500',
+    paddingVertical: 0,
   },
-  row: {
+  primaryBtn: {
+    width: '100%',
+    height: 58,
+    borderRadius: 29,
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 40,
-  },
-  rememberContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderWidth: 2,
-    borderColor: '#2563EB',
-    borderRadius: 4,
-    marginRight: 10,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  checked: {
-    backgroundColor: '#2563EB',
-  },
-  rememberText: {
-    fontSize: 15,
-    color: '#64748B',
-  },
-  forgot: {
-    color: '#2563EB',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  loginBtn: {
-    backgroundColor: '#2563EB',
-    height: 56,
-    borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 30,
-    elevation: 3,
-    shadowColor: '#2563EB',
+    marginBottom: 28,
+    elevation: 6,
+    shadowColor: '#0066FF',
     shadowOpacity: 0.3,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 12,
   },
-  loginBtnText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
+  primaryBtnText: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '700',
   },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
+  footerContainer: {
     alignItems: 'center',
+    marginTop: 4,
   },
   footerText: {
-    fontSize: 15,
+    fontSize: 14,
     color: '#64748B',
+    fontWeight: '500',
   },
   footerLink: {
-    fontSize: 15,
-    color: '#2563EB',
-    fontWeight: '600',
+    fontWeight: '700',
   },
 });

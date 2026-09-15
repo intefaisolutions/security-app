@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { 
   View, Text, StyleSheet, TouchableOpacity, SafeAreaView, 
-  StatusBar, TextInput, ScrollView, Image 
+  StatusBar, TextInput, ScrollView, Image, ActivityIndicator 
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import FeatherIcon from 'react-native-vector-icons/Feather';
 import { useNavigation } from '@react-navigation/native';
 import { showToast } from '../../utils/toast';
+import { guardService } from '../../services/guardService';
 
 const ProgressBar = ({ step, totalSteps }: { step: number, totalSteps: number }) => {
   return (
@@ -27,6 +28,7 @@ const ProgressBar = ({ step, totalSteps }: { step: number, totalSteps: number })
 const VisitorEntryScreen = () => {
   const navigation = useNavigation();
   const [step, setStep] = useState(1);
+  const [loading, setLoading] = useState(false);
   const totalSteps = 5;
 
   const getStepSubtitle = (currentStep: number) => {
@@ -42,19 +44,66 @@ const VisitorEntryScreen = () => {
 
   // Form State
   const [visitorName, setVisitorName] = useState('');
+  const [visitorPhone, setVisitorPhone] = useState('');
   const [purpose, setPurpose] = useState('');
   const [selectedResident, setSelectedResident] = useState<string | null>(null);
+  const [residentsList, setResidentsList] = useState<any[]>([]);
 
-  const residentsList = [
-    { id: '1', name: 'Arjun Mehta', flat: 'Flat A-1203', tower: 'Tower A', avatar: 'A' },
-    { id: '2', name: 'Sneha Kapoor', flat: 'Flat A-1204', tower: 'Tower A', avatar: 'A' },
-    { id: '3', name: 'Vikram Reddy', flat: 'Flat A-1301', tower: 'Tower A', avatar: 'A' },
-  ];
+  React.useEffect(() => {
+    const fetchResidents = async () => {
+      try {
+        const res: any = await guardService.searchResidents('');
+        const list = res?.data || res || [];
+        if (Array.isArray(list) && list.length > 0) {
+          setResidentsList(list.map((r: any) => ({
+            id: r.id || r._id,
+            name: r.name || r.fullName,
+            flat: r.flatNumber ? `Flat ${r.flatNumber}` : (r.flat || 'Flat'),
+            tower: r.tower || r.block || 'Tower A',
+            avatar: (r.name || 'R').charAt(0).toUpperCase(),
+          })));
+        }
+      } catch (err) {}
+    };
+    fetchResidents();
+  }, []);
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (step === 4) {
-      showToast('Request sent for approval');
-      setStep(5);
+      if (!visitorName.trim()) {
+        showToast('Visitor name is required');
+        return;
+      }
+      setLoading(true);
+      try {
+        const selectedResObj = residentsList.find(r => r.id === selectedResident) || residentsList[0];
+        const categoryMap: Record<string, 'Guest' | 'Delivery' | 'Cab' | 'Service'> = {
+          'Delivery': 'Delivery',
+          'Guest / Family': 'Guest',
+          'Cab / Taxi': 'Cab',
+          'Service Staff': 'Service',
+        };
+        const category = categoryMap[purpose] || 'Guest';
+
+        const res = await guardService.registerEntry({
+          visitorName: visitorName.trim(),
+          phone: visitorPhone.trim() || '9876543210',
+          flat: selectedResObj ? selectedResObj.flat.replace('Flat ', '') : 'A-101',
+          category: category,
+          entryGate: 'Main Gate',
+        });
+
+        if (res && (res as any).success !== false) {
+          showToast('Approval request sent to resident');
+          setStep(5);
+        } else {
+          showToast((res as any)?.message || 'Failed to register entry');
+        }
+      } catch (err: any) {
+        showToast(err.message || 'Failed to send request');
+      } finally {
+        setLoading(false);
+      }
     } else if (step < 5) {
       setStep(step + 1);
     }
@@ -191,8 +240,16 @@ const VisitorEntryScreen = () => {
             </TouchableOpacity>
           );
         })}
-        <TouchableOpacity style={[styles.primaryButton, { marginTop: 20 }]} onPress={handleNext}>
-          <Text style={styles.primaryButtonText}>Send Approval Request</Text>
+        <TouchableOpacity 
+          style={[styles.primaryButton, { marginTop: 20 }, loading && { opacity: 0.7 }]} 
+          onPress={handleNext}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Text style={styles.primaryButtonText}>Send Approval Request</Text>
+          )}
         </TouchableOpacity>
       </ScrollView>
     </View>

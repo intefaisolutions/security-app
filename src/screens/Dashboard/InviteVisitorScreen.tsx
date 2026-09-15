@@ -1,19 +1,55 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
+import { visitorService } from '../../services/visitorService';
+import { showToast } from '../../utils/toast';
 
 const InviteVisitorScreen = () => {
   const navigation = useNavigation<any>();
-  const [name, setName] = useState('Karan Malhotra');
-  const [mobile, setMobile] = useState('+91 98765 12340');
-  const [purpose, setPurpose] = useState('Dinner at my place');
-  const [date, setDate] = useState('Sat, 12 Oct');
-  const [time, setTime] = useState('7:30 PM');
+  const [name, setName] = useState('');
+  const [mobile, setMobile] = useState('');
+  const [purpose, setPurpose] = useState('');
+  const todayStr = new Date().toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' });
+  const [date, setDate] = useState(todayStr);
+  const [time, setTime] = useState('7:00 PM');
+  const [loading, setLoading] = useState(false);
 
-  const handleGenerate = () => {
-    navigation.navigate('VisitorPass', { name, date, time });
+  const handleGenerate = async () => {
+    if (!name.trim()) {
+      Alert.alert('Required', 'Please enter visitor name');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const res: any = await visitorService.createPreApprovedPass({
+        visitorName: name.trim(),
+        visitorPhone: mobile.trim(),
+        category: 'Guest',
+        validDate: date,
+        validTimeSlot: time,
+        notes: purpose,
+      });
+
+      const passData = res?.data || res;
+      if (res && res.success !== false) {
+        showToast('Visitor pass generated!');
+        navigation.navigate('VisitorPass', {
+          name: name.trim(),
+          date,
+          time,
+          entryCode: passData?.entryCode || passData?.passCode || '123456',
+        });
+      } else {
+        Alert.alert('Error', res?.message || 'Failed to create pass');
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to generate visitor pass');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -87,8 +123,16 @@ const InviteVisitorScreen = () => {
       </ScrollView>
 
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.generateBtn} onPress={handleGenerate}>
-          <Text style={styles.generateBtnText}>Generate Visitor Pass</Text>
+        <TouchableOpacity
+          style={[styles.generateBtn, loading && { opacity: 0.7 }]}
+          onPress={handleGenerate}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="#ffffff" />
+          ) : (
+            <Text style={styles.generateBtnText}>Generate Visitor Pass</Text>
+          )}
         </TouchableOpacity>
       </View>
     </SafeAreaView>
